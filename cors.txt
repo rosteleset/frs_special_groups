@@ -1,0 +1,7 @@
+В браузере Chrome на ошибки CORS (консоль разработкичка F12):
+1) удалить файл ~/snap/flutter/common/flutter/bin/cache/flutter_tools.stamp
+2) в файле ~/snap/flutter/common/flutter/packages/flutter_tools/lib/src/web/chrome.dart
+найти:
+'--disable-extensions', 
+и добавить:
+'--disable-web-security',

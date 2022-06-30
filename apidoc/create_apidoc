@@ -1,0 +1,1 @@
+apidoc -i ../ -f ".*\\.php$" -o ../www/apidoc

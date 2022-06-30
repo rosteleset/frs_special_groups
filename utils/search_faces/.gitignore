@@ -1,0 +1,11 @@
+/*
+!.gitignore
+!.gitmodules
+!.clang-format
+!.clang-tidy
+!CMakeLists.txt
+!readme.md
+!*.cpp
+!*.h
+!contrib/
+!search_faces.config.example

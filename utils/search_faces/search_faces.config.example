@@ -1,0 +1,22 @@
+[common]
+events_path=/opt/frs/static/events
+host_url_prefix = https://your.domain
+tolerance=0.5
+group_id=1
+output_type=json
+
+[sql]
+;Адрес сервера
+host=localhost
+
+;Порт сервера
+port=33060
+
+;Название БД
+db_name=test_frs
+
+;Имя пользователя БД
+user_name=user_test
+
+;Пароль БД
+password=123123

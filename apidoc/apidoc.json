@@ -1,0 +1,12 @@
+{
+  "name": "API специальных групп FRS",
+  "version": "1.0.0",
+  "title": "API специальных групп FRS",
+  "sampleUrl": null,
+  "order": [
+    "list_faces",
+    "register_face",
+    "delete_faces",
+    "search_faces"
+  ]
+}
