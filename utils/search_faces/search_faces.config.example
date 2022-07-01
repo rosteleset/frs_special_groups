@@ -1,6 +1,8 @@
 [common]
 events_path=/opt/frs/static/events
 host_url_prefix = https://your.domain
+frs_logs_path=/opt/frs/static/screenshots
+frs_logs_url_prefix=http://localhost:9051/static/screenshots
 tolerance=0.5
 group_id=1
 output_type=json
