@@ -46,7 +46,7 @@ $redis_host = "127.0.0.1";
 $redis_port = 6379;
 $timeout = 10;
 $caption = "Сервис поиска людей";
-$search_faces_cmd = "/opt/frs/search_faces/search_faces_new";
+$search_faces_cmd = "/opt/frs/search_faces/search_faces";
 $search_faces_config = "/opt/frs/search_faces/search_faces.config";
 $search_faces_tolerance = "0.55";
 
