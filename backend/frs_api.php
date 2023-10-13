@@ -25,7 +25,7 @@ function curlFrsApiCall(string $api_method, string $json_data): array
 
     $curl = curl_init();
     curl_setopt($curl, CURLOPT_URL, $frs_api_url . $api_method);
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array('Accept: application/json', 'Content-Type: application/json',
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array('Expect:', 'Accept: application/json', 'Content-Type: application/json',
         'Authorization: Bearer ' . $special_groups[$id_sgroup]->group_api_token));
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_POSTFIELDS, $json_data);

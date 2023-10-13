@@ -71,6 +71,13 @@ if (property_exists($object, JSON_SIMILARITY))
     $search_faces_tolerance = $object->similarity;
 }
 
+
+$search_start_date = "-180";
+if (property_exists($object, JSON_BACK_DAYS))
+{
+    $search_start_date = ($object->backDays == 0 ? "now" : "-" . $object->backDays);
+}
+
 $key = "search" . $id_sgroup;
 $redis = new Redis();
 
@@ -80,7 +87,7 @@ try
     if ($redis->get($key) == null)
     {
         $redis->set($key, 1, $special_groups[$id_sgroup]->search_timeout);
-        $result = exec("$search_faces_cmd --events --frs_logs --config=$search_faces_config --group_id=$id_sgroup --tolerance=$search_faces_tolerance --output_type=json");
+        $result = exec("$search_faces_cmd --info --events --frs_logs --config=$search_faces_config --group_id=$id_sgroup --tolerance=$search_faces_tolerance --start_date=$search_start_date --output_type=json");
         echo($result);
     } else
     {

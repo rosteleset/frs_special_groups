@@ -1,7 +1,7 @@
 [submodule "utils/search_faces/contrib/abseil-cpp"]
 	path = utils/search_faces/contrib/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp.git
-	branch = lts_2021_11_02
+	branch = lts_2022_06_23
 [submodule "utils/search_faces/contrib/crow"]
 	path = utils/search_faces/contrib/crow
 	url = https://github.com/alexeimenshikh/Crow.git
@@ -9,3 +9,8 @@
 [submodule "utils/search_faces/contrib/mysql-connector-cpp"]
 	path = utils/search_faces/contrib/mysql-connector-cpp
 	url = https://github.com/mysql/mysql-connector-cpp.git
+	branch = trunk
+[submodule "utils/search_faces/contrib/cpr"]
+	path = utils/search_faces/contrib/cpr
+	url = https://github.com/libcpr/cpr.git
+	branch = 1.9.x

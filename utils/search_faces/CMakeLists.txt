@@ -8,4 +8,4 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/contrib)
 list(APPEND SOURCE_CORE main.cpp)
 add_executable(${TARGET_NAME} ${SOURCE_CORE})
 
-target_link_libraries(${TARGET_NAME} mysqlconncpp_library crow_library abseil_library Boost::program_options)
+target_link_libraries(${TARGET_NAME} mysqlconncpp_library crow_library abseil_library cpr_library Boost::program_options)

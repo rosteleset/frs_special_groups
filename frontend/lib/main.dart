@@ -2,9 +2,14 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:html' as html;
-import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
+
+import 'stub.dart'
+  if (dart.library.io) 'stub_io.dart'
+  if (dart.library.html) 'stub_web.dart';
+
+import 'dart:developer' as developer;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
@@ -18,9 +23,11 @@ const imageHeight = 200.0;
 const imageDialogWidth = 300.0;
 const imageDialogHeight = 300.0;
 const searchFaceHeight = 720.0;
-const faceCardHeight = 448.0;
+const faceCardHeight = 470.0;
 
 var sgGroupName = '';
+
+//для релиза web
 const sgApiBaseUrl = '/sg/';
 
 const sgApiLogin = sgApiBaseUrl + "login.php";
@@ -37,16 +44,28 @@ const dialogResultCancel = 0;
 const dialogResultOk = 1;
 const dialogResultYes = 2;
 const dialogResultNo = 3;
+const defaultSimilarity = 0.5;
+const defaultBackDays = 90;
 
 String login = '';
 String password = '';
 bool rememberMe = true;
 bool isLoggedIn = false;
 bool forceLogin = false;
-const String keyLogin = 'login';
-const String keyPassword = 'password';
-const String keyRememberMe = 'rememberMe';
-const String keyForceLogin = 'forceLogin';
+
+//для релиза web
+const String keyPrefix = sgApiBaseUrl;
+
+//для релиза mobile
+//const String keyPrefix = "mobile_";
+
+//для теста и релиза Liza Alert
+//const String keyPrefix = "";
+
+const String keyLogin = keyPrefix + 'login';
+const String keyPassword = keyPrefix + 'password';
+const String keyRememberMe = keyPrefix + 'rememberMe';
+const String keyForceLogin = keyPrefix + 'forceLogin';
 
 class MouseScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -59,16 +78,26 @@ class MouseScrollBehavior extends MaterialScrollBehavior {
 class Face {
   final int faceId;
   final String faceImage;
+  final Uint8List base64Image;
 
   const Face({
     required this.faceId,
     required this.faceImage,
+    required this.base64Image
   });
 
   factory Face.fromJson(Map<String, dynamic> json) {
+    var img = json['faceImage'].toString();
+    if (img.startsWith("data:")) {
+      var i = img.indexOf(",");
+      img = img.substring(i + 1, img.length);
+    } else {
+      img = "";
+    }
     return Face(
       faceId: json['faceId'],
       faceImage: json['faceImage'],
+      base64Image: base64Decode(img)
     );
   }
 }
@@ -137,13 +166,15 @@ class SearchFace {
   final String urlImage;
   final String eventDate;
   final double similarity;
+  final String info;
 
   const SearchFace({
     required this.uuid,
     required this.faceId,
     required this.urlImage,
     required this.eventDate,
-    required this.similarity
+    required this.similarity,
+    required this.info
   });
 
   factory SearchFace.fromJson(Map<String, dynamic> json) {
@@ -152,7 +183,8 @@ class SearchFace {
       faceId: json['id_descriptor'],
       urlImage: json['url_image'],
       eventDate: json['event_date'],
-      similarity: json['similarity']
+      similarity: json['similarity'],
+      info: json['info']
     );
   }
 }
@@ -181,7 +213,7 @@ class SgApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      scrollBehavior: MouseScrollBehavior(),
+      //scrollBehavior: MouseScrollBehavior(),
       title: appTitle,
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -209,14 +241,25 @@ class _SgHomePageState extends State<SgHomePage> {
   bool _rememberMe = rememberMe;
   bool _forceLogin = forceLogin;
   final Set<int> _excludedFaces = {};
-  double _currentSimilarity = 0.55;
+  double _currentSimilarity = defaultSimilarity;
+  int _searchBackDays = defaultBackDays;
 
   final _loginTextController = TextEditingController(text: login);
   final _passwordTextController = TextEditingController(text: password);
   final _personInfoController = TextEditingController();
+  final _backDaysController = TextEditingController();
 
   Future<List<Face>> _emptyFacesList() async {
     return [];
+  }
+
+  ImageProvider<Object> imageFromUrl(String url) {
+    if (url.startsWith("data:") && !kIsWeb) {
+      var i = url.indexOf(",");
+      return Image.memory(base64Decode(url.substring(i + 1, url.length))).image;
+    } else {
+      return NetworkImage(url);
+    }
   }
 
   @override
@@ -228,6 +271,7 @@ class _SgHomePageState extends State<SgHomePage> {
     } else {
       _peopleInfo.clear();
     }
+    _backDaysController.text = _searchBackDays.toString();
   }
 
   Future<int> callApiSearchFaces() async {
@@ -244,7 +288,8 @@ class _SgHomePageState extends State<SgHomePage> {
           body: jsonEncode(<String, dynamic> {
             'login': login,
             'password': password,
-            'similarity': _currentSimilarity
+            'similarity': _currentSimilarity,
+            'backDays': _searchBackDays,
           })
       );
 
@@ -367,7 +412,9 @@ class _SgHomePageState extends State<SgHomePage> {
         'password': password,
         'screenshot': item.urlImage,
         'date': item.eventDate,
-        'faceId': item.faceId
+        'faceId': item.faceId,
+        'personInfo': _peopleInfo[item.faceId] ?? "",
+        'eventInfo': item.info
       }));
       if (response.statusCode != 200) {
         showDialog(
@@ -394,7 +441,7 @@ class _SgHomePageState extends State<SgHomePage> {
         builder: (BuildContext context) => AlertDialog(
           title: const Text('Удалить фотографию?'),
           content: Image(
-            image: NetworkImage(url),
+            image: imageFromUrl(url),
             width: imageDialogWidth,
             height: imageDialogHeight,
           ),
@@ -446,7 +493,7 @@ class _SgHomePageState extends State<SgHomePage> {
         builder: (BuildContext context) => AlertDialog(
           title: const Text('Фотография зарегистрирована'),
           content: Image(
-            image: NetworkImage(url),
+            image: imageFromUrl(url),
             width: imageDialogWidth,
             height: imageDialogHeight,
           ),
@@ -504,10 +551,20 @@ class _SgHomePageState extends State<SgHomePage> {
                 .faceImage;
             await showRegisteredPhoto(url);
           } else {
+            String t = "Не удалось зарегистрировать фотографию.\n${response.statusCode} ${response.reasonPhrase}";
+            try {
+              Map<String, dynamic> r = jsonDecode(utf8.decode(response.bodyBytes));
+              if (r.containsKey('message')) {
+                t = r['message'];
+              }
+            } catch(_) {
+              //здесь ничего не делаем
+            }
+
             showDialog(
               context: context,
               builder: (BuildContext context) => AlertDialog(
-                content: Text(jsonDecode(utf8.decode(response.bodyBytes))['message']),
+                content: Text(t),
                 actions: <Widget>[
                   TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -635,88 +692,105 @@ class _SgHomePageState extends State<SgHomePage> {
       future: _futureFaces,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            scrollDirection: Axis.horizontal,
-            itemCount: snapshot.data!.length,
-            itemBuilder: (context, index) {
-              return Card(
-                elevation: 5,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(snapshot.data![index].faceId.toString()),
-                      ),
-                      Row(
+          var controller = ScrollController();
+          return ScrollConfiguration(
+            behavior: MouseScrollBehavior(),
+            child: Scrollbar(
+              controller: controller,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: controller,
+                padding: const EdgeInsets.all(16.0),
+                scrollDirection: Axis.horizontal,
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  return Card(
+                    elevation: 5,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.create),
-                            tooltip: "Изменить дополнительную информацию",
-                            onPressed: () {
-                              _peopleInfo.putIfAbsent(snapshot.data![index].faceId, () => "");
-                              updatePersonInfoDialog(context, snapshot.data![index].faceId, _peopleInfo[snapshot.data![index].faceId]!);
-                            },
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(snapshot.data![index].faceId.toString()),
                           ),
-                          if (_peopleInfo.containsKey(snapshot.data![index].faceId) && _peopleInfo[snapshot.data![index].faceId]!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(_peopleInfo[snapshot.data![index].faceId]!),
-                            )
-                          else
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Text("Нет информации",
-                                style: TextStyle(
-                                  color: Colors.grey,
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.create),
+                                tooltip: "Изменить дополнительную информацию",
+                                onPressed: () {
+                                  _peopleInfo.putIfAbsent(snapshot.data![index].faceId, () => "");
+                                  updatePersonInfoDialog(context, snapshot.data![index].faceId, _peopleInfo[snapshot.data![index].faceId]!);
+                                },
+                              ),
+                              if (_peopleInfo.containsKey(snapshot.data![index].faceId) && _peopleInfo[snapshot.data![index].faceId]!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(_peopleInfo[snapshot.data![index].faceId]!),
+                                )
+                              else
+                                const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Text("Нет информации",
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                    ),
+                                  ),
                                 ),
+                            ],
+                          ),
+                          if (kIsWeb) ...[
+                            Image(
+                              image: NetworkImage(snapshot.data![index].faceImage),
+                              width: imageWidth,
+                              height: imageHeight,
+                            )
+                          ] else ...[
+                            Image(
+                              image: Image.memory(snapshot.data![index].base64Image).image,
+                              width: imageWidth,
+                              height: imageHeight,
+                            )
+                          ],
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ElevatedButton(
+                              style: redButtonStyle,
+                              onPressed: () {
+                                deletePhotoDialog(context, snapshot.data![index].faceImage, snapshot.data![index].faceId);
+                              },
+                              child: Row(
+                                  children: const [
+                                    Icon(Icons.no_photography),
+                                    SizedBox(width: 8,),
+                                    Text('Удалить'),
+                                  ]
                               ),
                             ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Checkbox(
+                              value: !_excludedFaces.contains(snapshot.data![index].faceId),
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _excludedFaces.remove(snapshot.data![index].faceId);
+                                  } else {
+                                    _excludedFaces.add(snapshot.data![index].faceId);
+                                  }
+                                });
+                              },
+                            ),
+                          ),
                         ],
                       ),
-                      Image(
-                        image: NetworkImage(snapshot.data![index].faceImage),
-                        width: imageWidth,
-                        height: imageHeight,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: ElevatedButton(
-                          style: redButtonStyle,
-                          onPressed: () {
-                            deletePhotoDialog(context, snapshot.data![index].faceImage, snapshot.data![index].faceId);
-                          },
-                          child: Row(
-                              children: const [
-                                Icon(Icons.no_photography),
-                                SizedBox(width: 8,),
-                                Text('Удалить'),
-                              ]
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Checkbox(
-                          value: !_excludedFaces.contains(snapshot.data![index].faceId),
-                          onChanged: (bool? value) {
-                            setState(() {
-                              if (value == true) {
-                                _excludedFaces.remove(snapshot.data![index].faceId);
-                              } else {
-                                _excludedFaces.add(snapshot.data![index].faceId);
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                    ),
+                  );
+                },
+              ),
+            ),
           );
         } else if (snapshot.hasError) {
           return Text("${snapshot.error}");
@@ -735,15 +809,41 @@ class _SgHomePageState extends State<SgHomePage> {
             faceIndex = getFaceIndex(snapshot.data!, faceId);
           }
           if (faceIndex >= 0) {
-            return Image.network(
-              snapshot.data![faceIndex].faceImage,
-              width: imageWidth,
-              height: imageHeight,
-            );
+            if (kIsWeb) {
+              return Image.network(
+                snapshot.data![faceIndex].faceImage,
+                width: imageWidth,
+                height: imageHeight,
+              );
+            } else {
+              return Image(
+                image: Image.memory(snapshot.data![faceIndex].base64Image).image,
+                width: imageWidth,
+                height: imageHeight,
+              );
+            }
           }
 
           return const Text('-');
         },
+      );
+    }
+
+    ElevatedButton selectAll() {
+      return ElevatedButton(
+        style: blueButtonStyle,
+        onPressed: () {
+          setState(() {
+            _excludedFaces.clear();
+          });
+        },
+        child: Row(
+          children: const [
+            Icon(Icons.done_all),
+            SizedBox(width: 4,),
+            Text('Пометить все'),
+          ],
+        ),
       );
     }
 
@@ -771,6 +871,124 @@ class _SgHomePageState extends State<SgHomePage> {
             ),
           );
         });
+    }
+
+    Row similarityUi() {
+      return Row(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.help,
+              color: Colors.blue,
+            ),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (BuildContext context) => AlertDialog(
+                content: const Text('Параметр сходства определяет степень уверенности системы в том,\n'
+                    'что лицо в кадре похоже на зарегистрированную фотографию. Чем выше это значение,\n'
+                    'тем точнее результат поиска, но тем меньше кадров будет вам показано.\n'
+                    'Значение задаётся в диапазоне от 0,4 до 1. По умолчанию используется значение 0,55.'
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Text(
+            'Сходство: ${_currentSimilarity.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 10),
+          Slider(
+            min: 0.4,
+            max: 1.0,
+            divisions: 60,
+            label: _currentSimilarity.toStringAsFixed(2),
+            value: _currentSimilarity,
+            onChanged: (double value) {
+              setState(() {
+                _currentSimilarity = value;
+              });
+            },
+          ),
+        ],
+      );
+    }
+
+    Tooltip searchActionUi() {
+      return Tooltip(
+        message: 'Поиск людей по зарегистрированным фотографиям',
+        child: ElevatedButton(
+          style: blueButtonStyle,
+          onPressed: _searchFacesInProgress ? null : () async {
+            var r = await callApiSearchFaces();
+            if (r == 204) {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) => AlertDialog(
+                  content: const Text('Пожалуйста, сделайте поиск позднее.'
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
+          child: Row(
+            children: const [
+              Icon(Icons.search),
+              SizedBox(width: 4,),
+              Text('Поиск'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Row depthSearchUi() {
+      return Row(
+        children: [
+          const Text(
+            'За последнее кол-во дней: ',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(
+            width: 30,
+            child: TextField(
+              textAlign: TextAlign.end,
+              enableInteractiveSelection: false,
+              mouseCursor: SystemMouseCursors.basic,
+              readOnly: true,
+              controller: _backDaysController,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          //const SizedBox(width: 70),
+          Slider(
+            min: 0,
+            max: 90,
+            divisions: 90,
+            label: _searchBackDays.toString(),
+            value: _searchBackDays.toDouble(),
+            onChanged: (double value) {
+              setState(() {
+                _searchBackDays = value.toInt();
+                _backDaysController.text = _searchBackDays.toString();
+              });
+            },
+          ),
+        ],
+      );
     }
 
     Widget showMainUI() {
@@ -815,113 +1033,63 @@ class _SgHomePageState extends State<SgHomePage> {
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    ElevatedButton(
-                      style: blueButtonStyle,
-                      onPressed: () {
-                        setState(() {
-                          _excludedFaces.clear();
-                        });
-                      },
-                      child: Row(
-                        children: const [
-                          Icon(Icons.done_all),
-                          SizedBox(width: 4,),
-                          Text('Пометить все'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    deselectAll(),
-                  ],
+              if (kIsWeb) ...[
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      selectAll(),
+                      const SizedBox(width: 10),
+                      deselectAll(),
+                    ],
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.help,
-                        color: Colors.blue,
-                      ),
-                      onPressed: () => showDialog(
-                        context: context,
-                        builder: (BuildContext context) => AlertDialog(
-                          content: const Text('Параметр сходства определяет степень уверенности системы в том,\n'
-                              'что лицо в кадре похоже на зарегистрированную фотографию. Чем выше это значение,\n'
-                              'тем точнее результат поиска, но тем меньше кадров будет вам показано.\n'
-                              'Значение задаётся в диапазоне от 0,4 до 1. По умолчанию используется значение 0,55.'
-                          ),
-                          actions: <Widget>[
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Закрыть'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Сходство: ${_currentSimilarity.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 10),
-                    Slider(
-                      min: 0.4,
-                      max: 1.0,
-                      divisions: 60,
-                      label: _currentSimilarity.toStringAsFixed(2),
-                      value: _currentSimilarity,
-                      onChanged: (double value) {
-                        setState(() {
-                          _currentSimilarity = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 10),
-                    Tooltip(
-                      message: 'Поиск людей по зарегистрированным фотографиям',
-                      child: ElevatedButton(
-                        style: blueButtonStyle,
-                        onPressed: _searchFacesInProgress ? null : () async {
-                          var r = await callApiSearchFaces();
-                          if (r == 204) {
-                            showDialog(
-                              context: context,
-                              builder: (BuildContext context) => AlertDialog(
-                                content: const Text('Пожалуйста, сделайте поиск позднее.'
-                                ),
-                                actions: <Widget>[
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Закрыть'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                        },
-                        child: Row(
-                          children: const [
-                            Icon(Icons.search),
-                            SizedBox(width: 4,),
-                            Text('Поиск'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      selectAll(),
+                      const SizedBox(height: 10),
+                      deselectAll(),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              if (kIsWeb) ...[
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      similarityUi(),
+                      const SizedBox(width: 20),
+                      depthSearchUi(),
+                      const SizedBox(width: 20),
+                      searchActionUi(),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      similarityUi(),
+                      const SizedBox(height: 10),
+                      depthSearchUi(),
+                      const SizedBox(height: 10),
+                      searchActionUi(),
+                    ],
+                  ),
+                ),
+              ],
               if (_searchFacesInProgress) ...[
                 const Padding(
-                  padding: EdgeInsets.all(16.0),
+                  padding: EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 0.0),
                   child: Text(
                     'Производится поиск...',
                     textAlign: TextAlign.center,
@@ -929,7 +1097,10 @@ class _SgHomePageState extends State<SgHomePage> {
                   ),
                 ),
                 const Center(
-                  child: CircularProgressIndicator(),
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
               ],
               if (!_searchFacesInProgress && _searchFaces.isNotEmpty) ...[
@@ -982,10 +1153,11 @@ class _SgHomePageState extends State<SgHomePage> {
                                       ),
                                     ),
                                     IconButton(
-                                        onPressed: () {
-                                          Clipboard.setData(ClipboardData(text: item.uuid));
-                                        },
-                                        icon: const Icon(Icons.copy)
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: item.uuid));
+                                      },
+                                      icon: const Icon(Icons.copy),
+                                      tooltip: "Скопировать uuid",
                                     ),
                                   ],
                                 ),
@@ -1024,8 +1196,29 @@ class _SgHomePageState extends State<SgHomePage> {
                           flex: 2,
                           child: Wrap(
                             children: [
+                              if (item.info.isNotEmpty) ...[
+                                Row(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Text(
+                                        item.info,
+                                        textAlign: TextAlign.left,
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: item.info));
+                                      },
+                                      icon: const Icon(Icons.copy),
+                                      tooltip: "Скопировать информацию об объекте",
+                                    ),
+                                  ],
+                                ),
+                              ],
                               Padding(
-                                padding: const EdgeInsets.all(16.0),
+                                padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 48.0),
                                 child: InkWell(
                                   child: Image.network(
                                     item.urlImage,
@@ -1034,7 +1227,7 @@ class _SgHomePageState extends State<SgHomePage> {
                                     //fit: BoxFit.fitHeight,
                                   ),
                                   onTap: () {
-                                    html.window.open(item.urlImage, '_blank');
+                                    onFrameClicked(item.urlImage);
                                   },
                                 ),
                               ),
@@ -1169,7 +1362,8 @@ class _SgHomePageState extends State<SgHomePage> {
                     _peopleInfo.clear();
                     _searchFacesInProgress = false;
                     _excludedFaces.clear();
-                    _currentSimilarity = 0.55;
+                    _currentSimilarity = defaultSimilarity;
+                    _searchBackDays = defaultBackDays;
                     _loginFailed = false;
                   });
                 },

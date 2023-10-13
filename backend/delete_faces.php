@@ -38,5 +38,23 @@ if (!checkUserRight(ACCESS_RIGHT_SEARCH, JSON_CAN_WRITE))
 }
 
 list($response_code, $result) = curlFrsApiCall("sgDeleteFaces", file_get_contents("php://input"));
+if ($response_code >= 200 && $response_code < 300)
+{
+    //удаляем информацию из базы
+    if (property_exists($object, JSON_FACES))
+    {
+        $con = new mysqli($db_host, $db_user, $db_password, $db_database);
+        if ($con->connect_errno)
+        {
+            header('HTTP/1.1 500 Internal Server Error');
+            exit();
+        }
+
+        $faces = implode(', ', $object->faces);
+        $query = "delete from people_info where id_descriptor in (" . $faces . ")";
+        $con->query($query);
+        $con->close();
+    }
+}
 http_response_code($response_code);
 echo($result);

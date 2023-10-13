@@ -43,12 +43,12 @@ if ($con->connect_errno)
 }
 if (!isset($id_sgroup) && isset($login) && isset($password))
 {
-    $query = "select id_user, id_sgroup from users where login = ? and password = ?";
+    $query = "select u.id_user, u.id_sgroup, ub.bot_token, ub.chat_id from users u left join user_bots ub on ub.id_user = u.id_user where u.login = ? and u.password = ?";
     if ($stmt = $con->prepare($query))
     {
         $stmt->bind_param('ss', $login, $password);
         $stmt->execute();
-        $stmt->bind_result($id_user, $id_sgroup);
+        $stmt->bind_result($id_user, $id_sgroup, $user_bot_token, $user_chat_id);
         $stmt->fetch();
         $stmt->close();
     } else
@@ -71,8 +71,8 @@ if (isset($id_sgroup) && $id_sgroup > 0)
         $special_groups[$id_sgroup] = new GroupData();
         $special_groups[$id_sgroup]->group_name = $sgroup_name;
         $special_groups[$id_sgroup]->group_api_token = $api_token;
-        $special_groups[$id_sgroup]->bot_token = $bot_token;
-        $special_groups[$id_sgroup]->chat_id = $chat_id;
+        $special_groups[$id_sgroup]->bot_token = $user_bot_token ?? $bot_token;
+        $special_groups[$id_sgroup]->chat_id = $user_chat_id ?? $chat_id;
         $special_groups[$id_sgroup]->search_timeout = $search_timeout;
 
         header('Content-Type: application/json; charset=utf-8');

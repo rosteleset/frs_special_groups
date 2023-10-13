@@ -1,7 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ru.lanta.frontend">
+
+   <uses-permission android:name="android.permission.INTERNET" />
+
    <application
-        android:label="frontend"
+        android:label="Поиск людей"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

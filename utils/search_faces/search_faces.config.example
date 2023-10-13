@@ -1,6 +1,7 @@
 [common]
 events_path=/opt/frs/static/events
 host_url_prefix = https://your.domain
+url_event_template = https://your.domain/get_event
 frs_logs_path=/opt/frs/static/screenshots
 frs_logs_url_prefix=http://localhost:9051/static/screenshots
 tolerance=0.5
@@ -8,6 +9,8 @@ group_id=1
 output_type=json
 
 [sql]
+;Настройки MySQL, которые использует FRS
+
 ;Адрес сервера
 host=localhost
 
